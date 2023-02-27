@@ -54,11 +54,12 @@ func (s *APIServer) handleUser(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "DELETE" {
 		return s.handleDeleteUser(w, r)
 	}
-	return fmt.Errorf("Method not allowed")
+	return fmt.Errorf("Method not allowed %s", r.Method)
 }
 
 func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	user := NewUser("Mihajlo", "J", "m@gmail.com")
+	return WriteJSON(w, http.StatusOK, user)
 }
 
 func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {

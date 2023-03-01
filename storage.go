@@ -39,12 +39,34 @@ func (s *PostgresStore) Init() error {
 
 func (s *PostgresStore) createUserTable() error {
 	query := `create table if not exists users (
-		id serial primary key,
-		first_name varchar(50),
-		last_name varchar(50),
-		email varchar(50),
-		created_at timestamp
-	)`
+			id serial primary key,
+			name varchar(50),
+			email varchar(50),
+			created_at timestamp
+		);
+
+		create table if not exists developer_profile (
+			id serial primary key,
+			developer_id integer not null,
+			name varchar(50),
+			skills varchar(255),
+			location varchar(255),
+			portfolio varchar(255),
+			experience integer,
+			created_at timestamp,
+			foreign key (developer_id) references users (id)
+		);
+
+		create table if not exists company_profile (
+			id serial primary key,
+			company_id integer not null,
+			name varchar(50),
+			description varchar(255),
+			location varchar(255),
+			website varchar(255),
+			created_at timestamp,
+			foreign key (company_id) references users (id)
+		);`
 
 	_, err := s.db.Exec(query)
 	return err
@@ -52,10 +74,10 @@ func (s *PostgresStore) createUserTable() error {
 
 func (s *PostgresStore) CreateUser(user *User) error {
 	query := `insert into users
-	(first_name, last_name, email, created_at)
-	values ($1, $2, $3, $4)`
+	(name, email, created_at)
+	values ($1, $2, $3)`
 
-	_, err := s.db.Query(query, user.FirstName, user.LastName, user.Email, user.CreatedAt)
+	_, err := s.db.Query(query, user.Name, user.Email, user.CreatedAt)
 
 	if err != nil {
 		return err
@@ -107,8 +129,7 @@ func scanIntoUser(rows *sql.Rows) (*User, error) {
 	user := new(User)
 	err := rows.Scan(
 		&user.ID,
-		&user.FirstName,
-		&user.LastName,
+		&user.Name,
 		&user.Email,
 		&user.CreatedAt)
 

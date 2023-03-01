@@ -4,24 +4,38 @@ import (
 	"time"
 )
 
+type Role struct {
+	Slug string `json:"slug"`
+}
+
+func (r Role) String() string {
+	return r.Slug
+}
+
+var (
+	Unknown   = Role{""}
+	Company   = Role{"company"}
+	Developer = Role{"developer"}
+	Admin     = Role{"admin"}
+)
+
 type CreateUserRequest struct {
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
-	Email     string `json:"email"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type User struct {
 	ID        int       `json:"id"`
-	FirstName string    `json:"firstName"`
-	LastName  string    `json:"lastName"`
+	Name      string    `json:"name"`
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"createdAt"`
+	Role      Role      `json:"role"`
 }
 
-func NewUser(firstName, lastName, email string) *User {
+func NewUser(name, email string) *User {
+
 	return &User{
-		FirstName: firstName,
-		LastName:  lastName,
+		Name:      name,
 		Email:     email,
 		CreatedAt: time.Now().UTC(),
 	}

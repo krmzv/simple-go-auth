@@ -69,11 +69,19 @@ func (s *PostgresStore) UpdateUser(*User) error {
 }
 
 func (s *PostgresStore) DeleteUser(id int) error {
-	return nil
+	_, err := s.db.Query("delete from users where id = $1", id)
+	return err
 }
 
 func (s *PostgresStore) GetUserByID(id int) (*User, error) {
-	return nil, nil
+	rows, err := s.db.Query("select * from users where id = $1", id)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		return scanIntoUser(rows)
+	}
+	return nil, fmt.Errorf("User %d not found", id)
 }
 
 func (s *PostgresStore) GetUsers() ([]*User, error) {

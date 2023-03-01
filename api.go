@@ -27,7 +27,7 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 	router.HandleFunc("/user", makeHTTPHandleFunc(s.handleUser))
-	router.HandleFunc("/user/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetUserByID)))
+	router.HandleFunc("/user/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetUserByID), s.store))
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
 }
@@ -120,17 +120,49 @@ func validateJWT(tokenString string) (*jwt.Token, error) {
 	})
 }
 
-// eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImdlbGxvb0BnbWFpbC5jb20iLCJleHBpcmVzQXQiOjE1MDAwfQ.eFmXpxxowh-8wRrh8BS4dm-1symcs2vyE_SBKSCBUck
+// eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImdlbGxvb0BnbWFpbC5jb20iLCJleHBpcmVzQXQiOjE1MDAwfQ.AzjZBiwymrJIP-ebEaTbCy2P4OsB-GHU4ZzGmzS9Hyw
 
-func withJWTAuth(handlerFunc http.HandlerFunc) http.HandlerFunc {
+func permissionDenied(w http.ResponseWriter) {
+	WriteJSON(w, http.StatusForbidden, APIError{Error: "Permission denied"})
+}
+
+func withJWTAuth(handlerFunc http.HandlerFunc, s Storage) http.HandlerFunc {
 	fmt.Println("Authorized request")
 	return func(w http.ResponseWriter, r *http.Request) {
 		tokenString := r.Header.Get("x-jwt-token")
-		_, err := validateJWT(tokenString)
+		token, err := validateJWT(tokenString)
 		if err != nil {
-			WriteJSON(w, http.StatusForbidden, APIError{Error: "Invalid token"})
+			permissionDenied(w)
 			return
 		}
+
+		if !token.Valid {
+			permissionDenied(w)
+			return
+		}
+
+		userID, err := getUserID(r)
+		if err != nil {
+			permissionDenied(w)
+			return
+		}
+
+		user, err := s.GetUserByID(userID)
+		if err != nil {
+			permissionDenied(w)
+			return
+		}
+
+		claims := token.Claims.(jwt.MapClaims)
+		if user.Email != claims["email"] {
+			permissionDenied(w)
+			return
+		}
+
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, APIError{Error: "Invalid token"})
+		}
+
 		handlerFunc(w, r)
 	}
 }

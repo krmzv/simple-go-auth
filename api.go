@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
+	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 )
 
@@ -25,7 +27,7 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 	router.HandleFunc("/user", makeHTTPHandleFunc(s.handleUser))
-	router.HandleFunc("/user/{id}", makeHTTPHandleFunc(s.handleGetUserByID))
+	router.HandleFunc("/user/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetUserByID)))
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
 }
@@ -72,10 +74,15 @@ func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) err
 	if err := json.NewDecoder(r.Body).Decode(&createUserRequest); err != nil {
 		return err
 	}
-	user := NewUser(createUserRequest.FirstName, createUserRequest.LastName, createUserRequest.Email)
+	user := NewUser(createUserRequest.Name, createUserRequest.Email)
 	if err := s.store.CreateUser(user); err != nil {
 		return err
 	}
+	tokenString, err := createJWT(user)
+	if err != nil {
+		return nil
+	}
+	fmt.Println("JWT: ", tokenString)
 	return WriteJSON(w, http.StatusOK, user)
 }
 
@@ -88,6 +95,44 @@ func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) err
 		return nil
 	}
 	return WriteJSON(w, http.StatusOK, map[string]int{"deleted": id})
+}
+
+func createJWT(user *User) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"expiresAt": 15000,
+		"email":     user.Email,
+	})
+	secret := os.Getenv("JWT_SECRET")
+	// Sign and get the complete encoded token as a string using the secret
+	return token.SignedString([]byte(secret))
+}
+
+func validateJWT(tokenString string) (*jwt.Token, error) {
+	secret := os.Getenv("JWT_SECRET")
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Don't forget to validate the alg is what you expect:
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+
+		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
+		return []byte(secret), nil
+	})
+}
+
+// eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImdlbGxvb0BnbWFpbC5jb20iLCJleHBpcmVzQXQiOjE1MDAwfQ.eFmXpxxowh-8wRrh8BS4dm-1symcs2vyE_SBKSCBUck
+
+func withJWTAuth(handlerFunc http.HandlerFunc) http.HandlerFunc {
+	fmt.Println("Authorized request")
+	return func(w http.ResponseWriter, r *http.Request) {
+		tokenString := r.Header.Get("x-jwt-token")
+		_, err := validateJWT(tokenString)
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, APIError{Error: "Invalid token"})
+			return
+		}
+		handlerFunc(w, r)
+	}
 }
 
 func getUserID(r *http.Request) (int, error) {

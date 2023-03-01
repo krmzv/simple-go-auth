@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -51,10 +52,16 @@ func (s *APIServer) handleGetUsers(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *APIServer) handeGetUserByID(w http.ResponseWriter, r *http.Request) error {
-	id := mux.Vars(r)["id"]
-	fmt.Println(id)
-	//user := NewUser("Mihajlo", "J", "m@gmail.com")
-	return WriteJSON(w, http.StatusOK, &User{})
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return fmt.Errorf("Invalid ID given %s", idStr)
+	}
+	user, err := s.store.GetUserByID(id)
+	if err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, user)
 }
 
 func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {

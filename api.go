@@ -26,10 +26,44 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
+	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
 	router.HandleFunc("/user", makeHTTPHandleFunc(s.handleUser))
 	router.HandleFunc("/user/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetUserByID), s.store))
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
+}
+
+func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+
+	if r.Method != "POST" {
+		return fmt.Errorf("Method not allowed %s", r.Method)
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return err
+	}
+
+	user, err := s.store.GetUserByEmail(string(req.Email))
+	if err != nil {
+		return fmt.Errorf("User with email %s not found", req.Email)
+	}
+
+	if !user.ValidPassword(req.Password) {
+		return fmt.Errorf("Not authorized")
+	}
+
+	token, err := createJWT(user)
+	if err != nil {
+		return err
+	}
+
+	resp := LoginResponse{
+		Token: token,
+		Email: user.Email,
+	}
+
+	return WriteJSON(w, http.StatusOK, resp)
 }
 
 func (s *APIServer) handleUser(w http.ResponseWriter, r *http.Request) error {
@@ -70,19 +104,17 @@ func (s *APIServer) handleGetUserByID(w http.ResponseWriter, r *http.Request) er
 }
 
 func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
-	createUserRequest := new(CreateUserRequest)
-	if err := json.NewDecoder(r.Body).Decode(&createUserRequest); err != nil {
+	req := new(CreateUserRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return err
 	}
-	user := NewUser(createUserRequest.Name, createUserRequest.Email)
+	user, err := NewUser(req.Name, req.Email, req.Password)
+	if err != nil {
+		return err
+	}
 	if err := s.store.CreateUser(user); err != nil {
 		return err
 	}
-	tokenString, err := createJWT(user)
-	if err != nil {
-		return nil
-	}
-	fmt.Println("JWT: ", tokenString)
 	return WriteJSON(w, http.StatusOK, user)
 }
 
@@ -119,8 +151,6 @@ func validateJWT(tokenString string) (*jwt.Token, error) {
 		return []byte(secret), nil
 	})
 }
-
-// eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImdlbGxvb0BnbWFpbC5jb20iLCJleHBpcmVzQXQiOjE1MDAwfQ.AzjZBiwymrJIP-ebEaTbCy2P4OsB-GHU4ZzGmzS9Hyw
 
 func permissionDenied(w http.ResponseWriter) {
 	WriteJSON(w, http.StatusForbidden, APIError{Error: "Permission denied"})

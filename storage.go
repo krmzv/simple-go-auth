@@ -12,6 +12,7 @@ type Storage interface {
 	DeleteUser(int) error
 	GetUsers() ([]*User, error)
 	UpdateUser(*User) error
+	GetUserByEmail(string) (*User, error)
 	GetUserByID(int) (*User, error)
 }
 
@@ -42,6 +43,7 @@ func (s *PostgresStore) createUserTable() error {
 			id serial primary key,
 			name varchar(50),
 			email varchar(50) not null unique,
+			password varchar(255) not null,
 			created_at timestamp
 		);
 
@@ -74,10 +76,10 @@ func (s *PostgresStore) createUserTable() error {
 
 func (s *PostgresStore) CreateUser(user *User) error {
 	query := `insert into users
-	(name, email, created_at)
-	values ($1, $2, $3)`
+	(name, email, created_at, password)
+	values ($1, $2, $3, $4)`
 
-	_, err := s.db.Query(query, user.Name, user.Email, user.CreatedAt)
+	_, err := s.db.Query(query, user.Name, user.Email, user.CreatedAt, user.Password)
 
 	if err != nil {
 		return err
@@ -106,6 +108,19 @@ func (s *PostgresStore) GetUserByID(id int) (*User, error) {
 	return nil, fmt.Errorf("User %d not found", id)
 }
 
+func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
+	rows, err := s.db.Query("select * from users where email = $1", email)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		return scanIntoUser(rows)
+	}
+
+	return nil, fmt.Errorf("User with email not found")
+}
+
 func (s *PostgresStore) GetUsers() ([]*User, error) {
 	rows, err := s.db.Query("select * from users")
 	if err != nil {
@@ -131,6 +146,7 @@ func scanIntoUser(rows *sql.Rows) (*User, error) {
 		&user.ID,
 		&user.Name,
 		&user.Email,
+		&user.Password,
 		&user.CreatedAt)
 
 	return user, err

@@ -34,14 +34,36 @@ func (s *APIServer) Run() {
 }
 
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+
 	if r.Method != "POST" {
-		return fmt.Errorf("method not allowed %s", r.Method)
+		return fmt.Errorf("Method not allowed %s", r.Method)
 	}
+
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return err
 	}
-	return WriteJSON(w, http.StatusOK, req)
+
+	user, err := s.store.GetUserByEmail(string(req.Email))
+	if err != nil {
+		return fmt.Errorf("User with email %s not found", req.Email)
+	}
+
+	if !user.ValidPassword(req.Password) {
+		return fmt.Errorf("Not authorized")
+	}
+
+	token, err := createJWT(user)
+	if err != nil {
+		return err
+	}
+
+	resp := LoginResponse{
+		Token: token,
+		Email: user.Email,
+	}
+
+	return WriteJSON(w, http.StatusOK, resp)
 }
 
 func (s *APIServer) handleUser(w http.ResponseWriter, r *http.Request) error {

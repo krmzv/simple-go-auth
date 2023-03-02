@@ -26,6 +26,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type LoginResponse struct {
+	Email string `json:"email"`
+	Token string `json:"token"`
+}
+
 type CreateUserRequest struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
@@ -39,6 +44,10 @@ type User struct {
 	Password  string    `json:"password"`
 	CreatedAt time.Time `json:"createdAt"`
 	Role      Role      `json:"role"`
+}
+
+func (u *User) ValidPassword(pw string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(pw)) == nil
 }
 
 func NewUser(name, email, password string) (*User, error) {

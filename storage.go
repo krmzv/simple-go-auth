@@ -45,29 +45,6 @@ func (s *PostgresStore) createUserTable() error {
 			email varchar(50) not null unique,
 			password varchar(255) not null,
 			created_at timestamp
-		);
-
-		create table if not exists developer_profile (
-			id serial primary key,
-			developer_id integer not null,
-			name varchar(50),
-			skills varchar(255),
-			location varchar(255),
-			portfolio varchar(255),
-			experience integer,
-			created_at timestamp,
-			foreign key (developer_id) references users (id)
-		);
-
-		create table if not exists company_profile (
-			id serial primary key,
-			company_id integer not null,
-			name varchar(50),
-			description varchar(255),
-			location varchar(255),
-			website varchar(255),
-			created_at timestamp,
-			foreign key (company_id) references users (id)
 		);`
 
 	_, err := s.db.Exec(query)
